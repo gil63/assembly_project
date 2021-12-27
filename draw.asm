@@ -20,7 +20,7 @@ pressed_last_frame db 0
 dot_sprite_size db 1
 dot_hitbox_size db 2
 button_count db 2
-mode db 1 ; 1 = create dots, 2 = move dots, 3 = select dots
+mode db 2 ; 1 = move dots, 2 = create dots, 3 = select dots
 highlighted_button db 2 ; 255 = none
 button_images dw 16 dup(0)
 
@@ -42,24 +42,24 @@ proc draw_dot
     sub [x_point], cx
     sub [y_point], cx
 
-draw_dot_go_right:
+go_right:
     call print_point
 
     inc [x_point]
     cmp [x_point], ax
-    jg draw_dot_go_down
-    jmp draw_dot_go_right
+    jg go_down
+    jmp go_right
 
-draw_dot_go_down:
+go_down:
     sub [x_point], cx
     sub [x_point], cx
     dec [x_point]
     inc [y_point]
     cmp [y_point], bx
-    jg draw_dot_finish
-    jmp draw_dot_go_right
+    jg finish1
+    jmp go_right
 
-draw_dot_finish:
+finish1:
     pop cx
     pop bx
     pop ax
@@ -281,7 +281,7 @@ endp
 proc update_buttons
     ; gets location in x_point, y_point
     ; gets mouse press info in zf (1 = pressed)
-    ; zf = 1 = pressed buttons
+    ; zf = 1 = on buttons
     push ax
     push [x_point]
     push [y_point]
@@ -292,42 +292,41 @@ proc update_buttons
 change_both:
     mov [highlighted_button], 255
     cmp [y_point], 16
-    jg finish5
+    jg not_pressed
 
     shr [x_point], 4
     mov al, [button_count]
     xor ah, ah
     cmp [x_point], ax
-    jge finish5
+    jge not_pressed
 
     sub ax, [x_point]
     mov [highlighted_button], al
     mov [mode], al
-    jmp finish5
+    jmp pressed
 
 change_highlighted:
     mov [highlighted_button], 255
     cmp [y_point], 16
-    jg finish5
+    jg not_pressed
 
     shr [x_point], 4
     mov al, [button_count]
     xor ah, ah
     cmp [x_point], ax
-    jge finish5
+    jge not_pressed
     
     sub ax, [x_point]
     mov [highlighted_button], al
-    jmp finish5
+    jmp pressed
 
 pressed:
     cmp ax, ax
     jmp finish5
 
 not_pressed:
-    mov ax, bx
-    inc ax
-    cmp ax, bx
+    mov ax, 1
+    cmp ax, 0
 
 finish5:
     pop [y_point]
@@ -603,6 +602,7 @@ start:
     jmp mode1
 
 switch_mode:
+    call draw_buttons
     popf
     cmp [mode], 1
     jz mode1
@@ -623,9 +623,14 @@ mode1:
     jz switch_mode
     popf
 
-    ; continue
     jnz mode1
-    call save_point
+    call get_point_at_location
+    jnz mode1
+    mov bx, ax
+    mov ax, [x_point]
+    mov [x_points + bx], ax
+    mov ax, [y_point]
+    mov [y_points + bx], ax
     call draw_saved_points
     jmp mode1
 
@@ -636,21 +641,15 @@ mode2:
     ; swich modes
     pushf
     call update_buttons
-    pushf
+    jz switch_mode
     call draw_buttons
     popf
-    jz switch_mode
-    popf
 
+    ; continue
     jnz mode2
-    call get_point_at_location
-    jnz mode2
-    mov bx, ax
-    mov ax, [x_point]
-    mov [x_points + bx], ax
-    mov ax, [y_point]
-    mov [y_points + bx], ax
+    call save_point
     call draw_saved_points
+    jmp mode2
 
 exit_loop:
     jmp exit_loop
