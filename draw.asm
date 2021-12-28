@@ -7,8 +7,12 @@ STACK 100h
 DATASEG
 
 point_index db 255 dup(0)
+selected_points_count db 0
+highlighted_point db 0 ; 1 = exsists, 0 = doesn't
 selected_points_x dw 255 dup(0)
 selected_points_y dw 255 dup(0)
+highlighted_point_x dw 0
+highlighted_point_y dw 0
 used_points db 255 dup(0)
 x_points dw 255 dup(0)
 y_points dw 255 dup(0)
@@ -25,6 +29,29 @@ highlighted_button db 2 ; 255 = none
 button_images dw 16 dup(0)
 
 CODESEG
+
+proc add_selected_point
+    ; gets point in x_point, y_point
+    push ax
+    push bx
+
+    mov bl, [selected_points_count]
+    add bl, [selected_points_count]
+    mov ax, [x_point]
+    mov [selected_points_x + bx], ax
+    mov ax, [y_point]
+    mov [selected_points_y + bx], ax
+    inc [selected_points_count]
+
+    pop bx
+    pop ax
+    ret
+endp
+
+proc clear_selected_points
+    mov [selected_points_count], 0
+    ret
+endp
 
 proc draw_dot
     push ax
@@ -335,6 +362,46 @@ finish5:
     ret
 endp
 
+proc update_points
+    ; gets location in x_point, y_point
+    ; gets mouse press info in zf (1 = pressed)
+    push ax
+    push [x_point]
+    push [y_point]
+
+    mov [highlighted_point], 0
+    jz pressed1
+    jmp not_pressed1
+
+pressed1:
+    call get_point_at_location
+    jnz not_pressed_point
+
+    call add_selected_point
+    jmp finish6
+
+not_pressed_point:
+    call clear_selected_points
+    jmp finish6
+
+not_pressed1:
+    call get_point_at_location
+    jnz finish6
+
+    mov [highlighted_point], 1
+    mov ax, [x_point]
+    mov [highlighted_point_x], ax
+    mov ax, [y_point]
+    mov [highlighted_point_y], ax
+    jmp finish6
+
+finish6:
+    pop [y_point]
+    pop [x_point]
+    pop ax
+    ret
+endp
+
 proc save_point
     ; creates at (x_point, y_point)
     push ax
@@ -380,7 +447,6 @@ proc draw_saved_points
     push cx
 
     ; draw the fist point
-    mov cx, 255
     cmp [used_points], 1
     jnz find_next
     mov ax, [x_points]
@@ -400,12 +466,11 @@ find_next:
     jz draw_next
     
     loop find_next
-    jmp finish
+    jmp draw_highlighted_point
 
 draw_next:
-    mov ax, 2
-    mul cx
-    mov bx, ax
+    mov bx, cx
+    add bx, cx
     mov ax, [x_points + bx]
     mov [x_point], ax
     mov ax, [y_points + bx]
@@ -413,6 +478,43 @@ draw_next:
     call draw_dot
 
     loop find_next
+
+draw_highlighted_point:
+    cmp [highlighted_point], 0
+    jz draw_selected_points
+
+    mov ax, [highlighted_point_x]
+    mov [x_point], ax
+    mov ax, [highlighted_point_y]
+    mov [y_point], ax
+
+draw_selected_points:
+    ; draw selected points
+    ; draw the fist point
+    cmp [selected_points_count], 0
+    jz finish
+
+    mov ax, [selected_points_x]
+    mov [x_point], ax
+    mov ax, [selected_points_y]
+    mov [y_point], ax
+    call draw_dot
+
+    ; start
+    mov cl, [selected_points_count]
+    loop draw_next2
+    jmp finish
+
+draw_next2:
+    mov bx, cx
+    add bx, cx
+    mov ax, [x_points + bx]
+    mov [x_point], ax
+    mov ax, [y_points + bx]
+    mov [y_point], ax
+    call draw_dot
+
+    loop draw_next2
 
 finish:
     pop cx
@@ -623,14 +725,7 @@ mode1:
     jz switch_mode
     popf
 
-    jnz mode1
-    call get_point_at_location
-    jnz mode1
-    mov bx, ax
-    mov ax, [x_point]
-    mov [x_points + bx], ax
-    mov ax, [y_point]
-    mov [y_points + bx], ax
+    call update_points
     call draw_saved_points
     jmp mode1
 
