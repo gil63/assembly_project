@@ -54,6 +54,7 @@ proc clear_selected_points
 endp
 
 proc draw_dot
+    ; draws a dot at x_point, y_point
     push ax
     push bx
     push cx
@@ -234,34 +235,64 @@ proc get_point_at_location
     ; returns in ax the index of the point if there is one
     push bx
     push cx
+    push dx
 
     ; reset
     mov cx, 256
-    loop next_point
+    jmp next_point
 
 smaller_then:
-    jle finish3
-    loop next_point
+    mov bx, ax
+    xor ax, ax
+    sub ax, bx
+    cmp ah, 0
+    jnz loop_next
+    cmp al, [dot_hitbox_size]
+    jle pressed2
+    jmp loop_next
 
 bigger_then:
-    jge finish3
-    loop next_point
+    cmp ah, 0
+    jnz loop_next
+    cmp al, [dot_hitbox_size]
+    jle pressed2
+    jmp loop_next
 
 next_point:
     ; check if pressing the point
     mov bx, cx
+    dec bx
     
+    cmp [used_points + bx], 1
+    jnz loop_next
+
+    add bx, cx
+    dec bx
+
     mov ax, [x_point]
     add ax, [y_point]
-    sub ax, [x_points + bx]
-    sub ax, [y_points + bx]
-    js bigger_then
-    jmp smaller_then
+    mov dx, [x_points + bx]
+    add dx, [y_points + bx]
+    sub ax, dx
+    js smaller_then
+    jmp bigger_then
 
+loop_next:
     loop next_point
+    jmp not_pressed2
+
+not_pressed2:
+    mov ax, 1
+    cmp ax, 0
+    jmp finish3
+
+pressed2:
+    cmp ax, ax
+    jmp finish3
 
 finish3:
     mov ax, cx
+    pop dx
     pop cx
     pop bx
     ret
@@ -447,6 +478,7 @@ proc draw_saved_points
     push cx
 
     ; draw the fist point
+    mov [color], 15
     cmp [used_points], 1
     jnz find_next
     mov ax, [x_points]
@@ -466,6 +498,7 @@ find_next:
     jz draw_next
     
     loop find_next
+    mov [color], 11
     jmp draw_highlighted_point
 
 draw_next:
@@ -491,6 +524,7 @@ draw_highlighted_point:
 draw_selected_points:
     ; draw selected points
     ; draw the fist point
+    mov [color], 12
     cmp [selected_points_count], 0
     jz finish
 
@@ -500,7 +534,6 @@ draw_selected_points:
     mov [y_point], ax
     call draw_dot
 
-    ; start
     mov cl, [selected_points_count]
     loop draw_next2
     jmp finish
@@ -702,6 +735,27 @@ start:
     mov [button_images + 62], 0000000000000000b
 
     jmp mode1
+
+    mov [x_point], 10
+    mov [y_point], 20
+    call save_point
+    
+    mov [x_point], 50
+    mov [y_point], 100
+    call save_point
+
+    mov [x_point], 50
+    mov [y_point], 100
+    ; cmp ax, ax
+    call get_point_at_location
+
+    ; mov [selected_points_x], 10
+    ; mov [selected_points_y], 20
+    ; mov [selected_points_count], 1
+
+    call draw_saved_points
+
+    jmp exit_loop
 
 switch_mode:
     call draw_buttons
