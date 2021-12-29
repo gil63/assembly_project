@@ -6,16 +6,17 @@ STACK 100h
 
 DATASEG
 
-point_index db 255 dup(0)
-selected_points_count db 0
-highlighted_point db 0 ; 1 = exsists, 0 = doesn't
-selected_points_x dw 255 dup(0)
-selected_points_y dw 255 dup(0)
-highlighted_point_x dw 0
-highlighted_point_y dw 0
-used_points db 255 dup(0)
+;point_index db 255 dup(0)
+;selected_points_count db 0
+;highlighted_point db 0 ; 1 = exsists, 0 = doesn't
+;selected_points_x dw 255 dup(0)
+;selected_points_y dw 255 dup(0)
+;highlighted_point_x dw 0
+;highlighted_point_y dw 0
+;used_points db 255 dup(0)
 x_points dw 255 dup(0)
 y_points dw 255 dup(0)
+point_info dw 255 dup(0) ; first byte = color, second byte = state (0 = doesn't exists, 1 = normal, 2 = highlighted, 3 = selected)
 x_point dw 0
 y_point dw 0
 color db 15
@@ -30,7 +31,7 @@ button_images dw 16 dup(0)
 
 CODESEG
 
-proc add_selected_point
+proc add_selected_point ; change 2
     ; gets point in x_point, y_point
     push ax
     push bx
@@ -48,7 +49,7 @@ proc add_selected_point
     ret
 endp
 
-proc clear_selected_points
+proc clear_selected_points ; change 2
     mov [selected_points_count], 0
     ret
 endp
@@ -94,7 +95,7 @@ finish1:
     ret
 endp
 
-proc draw_line
+proc draw_line ; change 2
     ; requires selected_points
     push ax
     push bx
@@ -229,7 +230,7 @@ proc get_mouse_press_info
 	ret
 endp
 
-proc get_point_at_location
+proc get_point_at_location ; change
     ; gets location in x_point, y_point
     ; zf = 1 = pressed a point
     ; returns in ax the index of the point if there is one
@@ -298,7 +299,7 @@ finish3:
     ret
 endp
 
-proc check_point_existance
+proc check_point_existance ; change
     ; gets index in ax
     ; zf is 1 if the point exists and 0 if it doesn't
     push ax
@@ -393,7 +394,7 @@ finish5:
     ret
 endp
 
-proc update_points
+proc update_points ; change 2
     ; gets location in x_point, y_point
     ; gets mouse press info in zf (1 = pressed)
     push ax
@@ -433,7 +434,7 @@ finish6:
     ret
 endp
 
-proc save_point
+proc save_point ; change 1 also make it not draw point
     ; creates at (x_point, y_point)
     push ax
     push bx
@@ -472,7 +473,7 @@ find_space:
     ret
 endp
 
-proc draw_saved_points
+proc draw_saved_points ; change 1
     push ax
     push bx
     push cx
