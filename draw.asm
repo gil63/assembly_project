@@ -6,17 +6,9 @@ STACK 100h
 
 DATASEG
 
-;point_index db 255 dup(0)
-;selected_points_count db 0
-;highlighted_point db 0 ; 1 = exsists, 0 = doesn't
-;selected_points_x dw 255 dup(0)
-;selected_points_y dw 255 dup(0)
-;highlighted_point_x dw 0
-;highlighted_point_y dw 0
-;used_points db 255 dup(0)
 x_points dw 512 dup(0)
 y_points dw 512 dup(0)
-point_info dw 512 dup(0) ; first byte = color, second byte = state (0 = doesn't exists, 1 = normal, 2 = highlighted, 3 = selected)
+point_info dw 512 dup(0) ; first byte = color, second byte = mode (0 = doesn't exists, 1 = normal, 2 = highlighted, 3 = selected)
 x_point dw 0
 y_point dw 0
 color db 15
@@ -31,28 +23,58 @@ button_images dw 32 dup(0)
 
 CODESEG
 
-; proc add_selected_point ; change
-;     ; gets point in x_point, y_point
-;     push ax
-;     push bx
+proc clear_selected_points
+    push cx
 
-;     mov bl, [selected_points_count]
-;     add bl, [selected_points_count]
-;     mov ax, [x_point]
-;     mov [selected_points_x + bx], ax
-;     mov ax, [y_point]
-;     mov [selected_points_y + bx], ax
-;     inc [selected_points_count]
+    mov cx, 256
+    jmp next_point1
 
-;     pop bx
-;     pop ax
-;     ret
-; endp
+reset_point:
+    mov ah, 1
+    mov [point_info + bx], ax
+    loop next_point1
+    jmp finish3
 
-; proc clear_selected_points ; change 2
-;     mov [selected_points_count], 0
-;     ret
-; endp
+next_point1:
+    mov bx, cx
+    dec bx
+    add bx, bx
+    mov ax, [point_info + bx]
+    cmp ah, 3
+    jz reset_point
+    loop next_point1
+    jmp finish3
+
+finish3:
+    pop cx
+    ret
+endp
+
+proc clear_highlighted_point
+    push cx
+
+    mov cx, 256
+    jmp next_point2
+
+reset_point1:
+    mov ah, 1
+    mov [point_info + bx], ax
+    jmp finish9
+
+next_point2:
+    mov bx, cx
+    dec bx
+    add bx, bx
+    mov ax, [point_info + bx]
+    cmp ah, 2
+    jz reset_point1
+    loop next_point2
+    jmp finish9
+
+finish9:
+    pop cx
+    ret
+endp
 
 proc draw_dot
     ; draws a dot at x_point, y_point
@@ -96,7 +118,7 @@ finish1:
     ret
 endp
 
-; proc draw_line ; change 2
+; proc draw_line ; change 4
 ;     ; requires selected_points
 ;     push ax
 ;     push bx
@@ -231,7 +253,7 @@ proc get_mouse_press_info
 	ret
 endp
 
-proc get_point_at_location
+proc get_point_at_location ; might have a bug
     ; gets location in x_point, y_point
     ; zf = 1 = pressed a point
     ; returns in ax the index of the point if there is one
@@ -245,14 +267,13 @@ proc get_point_at_location
 
 next_point:
     ; check if pressing the point
-    mov ax, cx
-    dec ax
+    mov bx, cx
+    dec bx
+    add bx, bx
     
-    call check_point_existance
-    jnz loop_next
-
-    mov bx, ax
-    add bx, ax
+    mov ax, [point_info + bx]
+    cmp ah, 0
+    jz loop_next
 
     ; calculate distance to point
     mov ax, [x_point]
@@ -293,23 +314,6 @@ not_found_point:
     pop dx
     pop cx
     pop bx
-    ret
-endp
-
-proc check_point_existance
-    ; gets index in ax
-    ; zf is 1 if the point exists and 0 if it doesn't
-    push ax
-    push bx
-    
-    ; check
-    mov bx, ax
-    add bx, ax
-    cmp [point_info + bx + 1], 0
-    call toggle_zf
-
-    pop bx
-    pop ax
     ret
 endp
 
@@ -374,7 +378,7 @@ proc print_point
     ret
 endp
 
-proc update_buttons ; use toggle zf
+proc update_buttons
     ; gets location in x_point, y_point
     ; gets mouse press info in zf (1 = pressed)
     ; zf = 1 = on buttons
@@ -431,48 +435,54 @@ finish5:
     ret
 endp
 
-; proc update_points ; change 2
-;     ; gets location in x_point, y_point
-;     ; gets mouse press info in zf (1 = pressed)
-;     push ax
-;     push [x_point]
-;     push [y_point]
+proc update_points ; fix
+    ; gets location in x_point, y_point
+    ; gets mouse press info in zf (1 = pressed)
+    push ax
+    push bx
 
-;     mov [highlighted_point], 0
-;     jz pressed1
-;     jmp not_pressed1
+    pushf
+    call get_point_at_location
+    jnz reset_points
+    popf
+    jz pressed_point
+    jmp above_point
 
-; pressed1:
-;     call get_point_at_location
-;     jnz not_pressed_point
+pressed_point:
+    mov bx, ax
+    add bx, ax
+    mov ax, [point_info + bx]
+    mov ah, 3
+    mov [point_info + bx], ax
+    call clear_highlighted_point
+    jmp finish6
 
-;     call add_selected_point
-;     jmp finish6
+above_point:
+    pushf
+    call clear_highlighted_point
+    popf
+    mov bx, ax
+    add bx, ax
+    mov ax, [point_info + bx]
+    mov ah, 2
+    mov [point_info + bx], ax
+    jmp finish6
 
-; not_pressed_point:
-;     call clear_selected_points
-;     jmp finish6
+reset_points:
+    popf
+    call clear_selected_points
+    call clear_highlighted_point
+    jmp finish6
 
-; not_pressed1:
-;     call get_point_at_location
-;     jnz finish6
-
-;     mov [highlighted_point], 1
-;     mov ax, [x_point]
-;     mov [highlighted_point_x], ax
-;     mov ax, [y_point]
-;     mov [highlighted_point_y], ax
-;     jmp finish6
-
-; finish6:
-;     pop [y_point]
-;     pop [x_point]
-;     pop ax
-;     ret
-; endp
+finish6:
+    pop bx
+    pop ax
+    ret
+endp
 
 proc save_point
     ; creates at (x_point, y_point)
+    ; gets color in [color]
     push ax
     push bx
     push cx
@@ -483,17 +493,19 @@ proc save_point
 
     ; find empty space in list
 find_space:
-    mov ax, cx
-    dec ax
+    mov bx, cx
+    dec bx
+    add bx, bx
 
     ; check if empty
-    call check_point_existance
-    jz next1
+    mov ax, [point_info + bx]
+    cmp ah, 0
+    jnz next1
 
     ; replace info
-    mov bx, ax
-    add bx, ax
-    mov [point_info + bx + 1], 1
+    mov al, [color]
+    mov ah, 1
+    mov [point_info + bx], ax
 
     ; replace x
     mov ax, [x_point]
@@ -515,33 +527,60 @@ finish8:
     ret
 endp
 
-proc draw_saved_points ; change 3
+proc draw_saved_points
     push ax
     push bx
     push cx
 
     ; start
-    mov [color], 15
     mov cx, 256
     jmp find_next
 
 find_next:
     ; check if exists
-    mov ax, cx
-    dec ax
-    call check_point_existance
-    jz draw_next
+    mov bx, cx
+    dec bx
+    add bx, bx
+
+    mov ax, [point_info + bx]
+    cmp ah, 1
+    jz draw_normal1
+    cmp ah, 2
+    jz draw_highlighted1
+    cmp ah, 3
+    jz draw_selected1
     
     loop find_next
     jmp finish
 
-draw_next:
-    mov bx, ax
-    add bx, ax
+draw_normal1:
+    mov [color], al
     mov ax, [x_points + bx]
     mov [x_point], ax
     mov ax, [y_points + bx]
     mov [y_point], ax
+    call draw_dot
+
+    loop find_next
+    jmp finish
+
+draw_selected1:
+    mov ax, [x_points + bx]
+    mov [x_point], ax
+    mov ax, [y_points + bx]
+    mov [y_point], ax
+    mov [color], 12
+    call draw_dot
+
+    loop find_next
+    jmp finish
+
+draw_highlighted1:
+    mov ax, [x_points + bx]
+    mov [x_point], ax
+    mov ax, [y_points + bx]
+    mov [y_point], ax
+    mov [color], 11
     call draw_dot
 
     loop find_next
@@ -698,68 +737,82 @@ start:
 	call clear_screen
 	call show_mouse
 
-    ; mov [button_images],      0000000000000000b
-    ; mov [button_images + 2],  0001111111111000b
-    ; mov [button_images + 4],  0010000000000100b
-    ; mov [button_images + 6],  0100000000000010b
-    ; mov [button_images + 8],  0100110000000010b
-    ; mov [button_images + 10], 0100111100000010b
-    ; mov [button_images + 12], 0100011100000010b
-    ; mov [button_images + 14], 0100011110000010b
-    ; mov [button_images + 16], 0100000111000010b
-    ; mov [button_images + 18], 0100000011100010b
-    ; mov [button_images + 20], 0100000001100010b
-    ; mov [button_images + 22], 0100000000010010b
-    ; mov [button_images + 24], 0100000000000010b
-    ; mov [button_images + 26], 0010000000000100b
-    ; mov [button_images + 28], 0001111111111000b
-    ; mov [button_images + 30], 0000000000000000b
+    mov [button_images],      0000000000000000b
+    mov [button_images + 2],  0001111111111000b
+    mov [button_images + 4],  0010000000000100b
+    mov [button_images + 6],  0100000000000010b
+    mov [button_images + 8],  0100110000000010b
+    mov [button_images + 10], 0100111100000010b
+    mov [button_images + 12], 0100011100000010b
+    mov [button_images + 14], 0100011110000010b
+    mov [button_images + 16], 0100000111000010b
+    mov [button_images + 18], 0100000011100010b
+    mov [button_images + 20], 0100000001100010b
+    mov [button_images + 22], 0100000000010010b
+    mov [button_images + 24], 0100000000000010b
+    mov [button_images + 26], 0010000000000100b
+    mov [button_images + 28], 0001111111111000b
+    mov [button_images + 30], 0000000000000000b
 
-    ; mov [button_images + 32], 0000000000000000b
-    ; mov [button_images + 34], 0001111111111000b
-    ; mov [button_images + 36], 0010000000000100b
-    ; mov [button_images + 38], 0100000110000010b
-    ; mov [button_images + 40], 0100001111000010b
-    ; mov [button_images + 42], 0100000110000010b
-    ; mov [button_images + 44], 0100100110010010b
-    ; mov [button_images + 46], 0101111111111010b
-    ; mov [button_images + 48], 0101111111111010b
-    ; mov [button_images + 50], 0100100110010010b
-    ; mov [button_images + 52], 0100000110000010b
-    ; mov [button_images + 54], 0100001111000010b
-    ; mov [button_images + 56], 0100000110000010b
-    ; mov [button_images + 58], 0010000000000100b
-    ; mov [button_images + 60], 0001111111111000b
-    ; mov [button_images + 62], 0000000000000000b
+    mov [button_images + 32], 0000000000000000b
+    mov [button_images + 34], 0001111111111000b
+    mov [button_images + 36], 0010000000000100b
+    mov [button_images + 38], 0100000110000010b
+    mov [button_images + 40], 0100001111000010b
+    mov [button_images + 42], 0100000110000010b
+    mov [button_images + 44], 0100100110010010b
+    mov [button_images + 46], 0101111111111010b
+    mov [button_images + 48], 0101111111111010b
+    mov [button_images + 50], 0100100110010010b
+    mov [button_images + 52], 0100000110000010b
+    mov [button_images + 54], 0100001111000010b
+    mov [button_images + 56], 0100000110000010b
+    mov [button_images + 58], 0010000000000100b
+    mov [button_images + 60], 0001111111111000b
+    mov [button_images + 62], 0000000000000000b
 
-    ; jmp mode2
+    jmp mode2
 
-    mov [x_point], 5
-    mov [y_point], 10
-    call save_point
-
-    mov [x_point], 100
-    mov [y_point], 50
-    call save_point
-    
     mov [x_point], 50
-    mov [y_point], 1
-    call save_point
-    
-    mov [x_point], 5
-    mov [y_point], 125
-    call save_point
-    
-    mov [x_point], 80
-    mov [y_point], 90
+    mov [y_point], 100
     call save_point
 
-    mov [x_point], 100
-    mov [y_point], 48
-    call get_point_at_location
+    mov al, [color]
+    mov ah, 2
+    mov [point_info + 510], ax
+
+    mov [x_point], 15
+    mov [y_point], 30
+    call save_point
+
+    mov [x_point], 123
+    mov [y_point], 35
+    call save_point
+    
+    mov al, [color]
+    mov ah, 3
+    mov [point_info + 506], ax
+    
+    mov [x_point], 46
+    mov [y_point], 152
+    call save_point
+    
+    mov al, [color]
+    mov ah, 3
+    mov [point_info + 504], ax
+
+    mov [x_point], 78
+    mov [y_point], 24
+    call save_point
+    
+    mov [x_point], 14
+    mov [y_point], 98
+    call save_point
+
+    call draw_saved_points
 
     jmp exit_loop
-
+    
 switch_mode:
     call draw_buttons
     popf
@@ -769,22 +822,20 @@ switch_mode:
     cmp [mode], 2
     jz mode2
 
-; mode1:
-;     ; get mouse data
-;     call get_mouse_press_info
+mode1:
+    ; get mouse data
+    call get_mouse_press_info
 
-;     ; swich modes
-;     pushf
-;     call update_buttons
-;     pushf
-;     call draw_buttons
-;     popf
-;     jz switch_mode
-;     popf
+    ; swich modes
+    pushf
+    call update_buttons
+    jz switch_mode
+    call draw_buttons
+    popf
 
-;     call update_points
-;     call draw_saved_points
-;     jmp mode1
+    call update_points
+    call draw_saved_points
+    jmp mode1
 
 mode2:
     ; get mouse data
@@ -799,6 +850,7 @@ mode2:
 
     ; continue
     jnz mode2
+    mov [color], 15
     call save_point
     call draw_saved_points
     jmp mode2
