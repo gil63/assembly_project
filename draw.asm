@@ -15,7 +15,7 @@ color db 15
 line_resulution dw 1000
 pressed_last_frame db 0
 dot_sprite_size db 1
-dot_hitbox_size dw 2
+dot_hitbox_size db 4
 button_count db 2
 mode db 2 ; 1 = move dots, 2 = create dots, 3 = select dots
 highlighted_button db 2 ; 255 = none
@@ -24,6 +24,8 @@ button_images dw 32 dup(0)
 CODESEG
 
 proc clear_selected_points
+    push ax
+    push bx
     push cx
 
     mov cx, 256
@@ -47,10 +49,14 @@ next_point1:
 
 finish3:
     pop cx
+    pop bx
+    pop ax
     ret
 endp
 
 proc clear_highlighted_point
+    push ax
+    push bx
     push cx
 
     mov cx, 256
@@ -73,6 +79,8 @@ next_point2:
 
 finish9:
     pop cx
+    pop bx
+    pop ax
     ret
 endp
 
@@ -253,7 +261,7 @@ proc get_mouse_press_info
 	ret
 endp
 
-proc get_point_at_location ; might have a bug
+proc get_point_at_location
     ; gets location in x_point, y_point
     ; zf = 1 = pressed a point
     ; returns in ax the index of the point if there is one
@@ -275,31 +283,36 @@ next_point:
     cmp ah, 0
     jz loop_next
 
-    ; calculate distance to point
-    mov ax, [x_point]
+    ; check x
+    xor ah, ah
+    mov al, [dot_hitbox_size]
+    add ax, [x_points + bx]
+    cmp [x_point], ax
+    ja loop_next
+
+    xor ah, ah
+    mov al, [dot_hitbox_size]
+    add ax, [x_point]
+    cmp [x_points + bx], ax
+    ja loop_next
+
+    ; check y
+    xor ah, ah
+    mov al, [dot_hitbox_size]
+    add ax, [y_points + bx]
+    cmp [y_point], ax
+    ja loop_next
+
+    xor ah, ah
+    mov al, [dot_hitbox_size]
     add ax, [y_point]
-    mov dx, [x_points + bx]
-    add dx, [y_points + bx]
-    sub ax, dx
+    cmp [y_points + bx], ax
+    ja loop_next
 
-    ; compare distance to hitbox
-    cmp [dot_hitbox_size], ax
-    ja found_point
-    neg ax
-    cmp [dot_hitbox_size], ax
-    ja found_point
-
-    ; repeat if too far
-    jmp loop_next
-
-loop_next:
-    loop next_point
-    call toggle_zf_off
-    jmp not_found_point
-
-found_point:
+    ; finish
     mov ax, cx
     dec ax
+
     call toggle_zf_on
     
     pop dx
@@ -307,8 +320,9 @@ found_point:
     pop bx
     ret
 
-
-not_found_point:
+loop_next:
+    loop next_point
+    
     call toggle_zf_off
 
     pop dx
@@ -435,20 +449,18 @@ finish5:
     ret
 endp
 
-proc update_points ; fix
+proc update_points ; blue overrides red
     ; gets location in x_point, y_point
     ; gets mouse press info in zf (1 = pressed)
     push ax
     push bx
 
-    pushf
-    call get_point_at_location
-    jnz reset_points
-    popf
     jz pressed_point
     jmp above_point
 
 pressed_point:
+    call get_point_at_location
+    jnz reset_points
     mov bx, ax
     add bx, ax
     mov ax, [point_info + bx]
@@ -458,18 +470,19 @@ pressed_point:
     jmp finish6
 
 above_point:
-    pushf
-    call clear_highlighted_point
-    popf
+    call get_point_at_location
+    jnz reset_points
     mov bx, ax
     add bx, ax
     mov ax, [point_info + bx]
+    cmp ah, 3
+    jz reset_points
+    call clear_highlighted_point
     mov ah, 2
     mov [point_info + bx], ax
     jmp finish6
 
 reset_points:
-    popf
     call clear_selected_points
     call clear_highlighted_point
     jmp finish6
@@ -777,10 +790,6 @@ start:
     mov [y_point], 100
     call save_point
 
-    mov al, [color]
-    mov ah, 2
-    mov [point_info + 510], ax
-
     mov [x_point], 15
     mov [y_point], 30
     call save_point
@@ -789,18 +798,10 @@ start:
     mov [y_point], 35
     call save_point
     
-    mov al, [color]
-    mov ah, 3
-    mov [point_info + 506], ax
-    
     mov [x_point], 46
     mov [y_point], 152
     call save_point
     
-    mov al, [color]
-    mov ah, 3
-    mov [point_info + 504], ax
-
     mov [x_point], 78
     mov [y_point], 24
     call save_point
@@ -808,6 +809,16 @@ start:
     mov [x_point], 14
     mov [y_point], 98
     call save_point
+
+    mov [x_point], 122
+    mov [y_point], 34
+
+    call get_point_at_location
+
+    ; call update_points
+    ; mov ax, [x_points + 506]
+    ; mov ax, [y_points + 506]
+    ; mov ax, [point_info + 506]
 
     call draw_saved_points
 
