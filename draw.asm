@@ -449,7 +449,7 @@ finish5:
     ret
 endp
 
-proc update_points ; blue overrides red
+proc update_points
     ; gets location in x_point, y_point
     ; gets mouse press info in zf (1 = pressed)
     push ax
@@ -471,12 +471,12 @@ pressed_point:
 
 above_point:
     call get_point_at_location
-    jnz reset_points
+    jnz reset_highlighted
     mov bx, ax
     add bx, ax
     mov ax, [point_info + bx]
     cmp ah, 3
-    jz reset_points
+    jz reset_highlighted
     call clear_highlighted_point
     mov ah, 2
     mov [point_info + bx], ax
@@ -484,6 +484,10 @@ above_point:
 
 reset_points:
     call clear_selected_points
+    call clear_highlighted_point
+    jmp finish6
+
+reset_highlighted:
     call clear_highlighted_point
     jmp finish6
 
@@ -785,44 +789,6 @@ start:
     mov [button_images + 62], 0000000000000000b
 
     jmp mode2
-
-    mov [x_point], 50
-    mov [y_point], 100
-    call save_point
-
-    mov [x_point], 15
-    mov [y_point], 30
-    call save_point
-
-    mov [x_point], 123
-    mov [y_point], 35
-    call save_point
-    
-    mov [x_point], 46
-    mov [y_point], 152
-    call save_point
-    
-    mov [x_point], 78
-    mov [y_point], 24
-    call save_point
-    
-    mov [x_point], 14
-    mov [y_point], 98
-    call save_point
-
-    mov [x_point], 122
-    mov [y_point], 34
-
-    call get_point_at_location
-
-    ; call update_points
-    ; mov ax, [x_points + 506]
-    ; mov ax, [y_points + 506]
-    ; mov ax, [point_info + 506]
-
-    call draw_saved_points
-
-    jmp exit_loop
     
 switch_mode:
     call draw_buttons
