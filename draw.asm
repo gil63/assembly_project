@@ -673,6 +673,7 @@ proc draw_buttons
     mov [x_point], 0
     mov [y_point], 0
     mov ax, offset button_images
+    xor ch, ch
     mov cl, [button_count]
     jmp draw_next1
 
@@ -907,32 +908,38 @@ start:
     call save_point
 
     mov [x_point], 20
-    mov [y_point], 20
+    mov [y_point], 10
     call save_point
 
     mov [point_info + 511], 3
     mov [point_info + 509], 3
 
-    mov cx, 50
-    mov dx, 50
+    mov cx, 5
+    mov dx, 10
+
     call move_selected_points
+    call hide_selected_points
+
+    mov ax, [x_points + 510]
+    mov ax, [y_points + 510]
+    mov ax, [x_points + 508]
+    mov ax, [y_points + 508]
+    mov ax, [point_info + 511]
+    mov ax, [point_info + 509]
+
+    mov [x_point], 25
+    mov [y_point], 20
+
+    call get_point_at_location
     call draw_saved_points
 
     jmp exit_loop
-    
-switch_mode:
-    call draw_buttons
-    popf
-    cmp [mode], 1
-    jz mode1
-
-    cmp [mode], 2
-    jz mode2
-
-    cmp [mode], 3
-    jz mode3
 
 mode1:
+    ; save last mouse data
+    mov cx, [x_point]
+    mov dx, [y_point]
+
     ; get mouse data
     call get_mouse_press_info
 
@@ -943,20 +950,42 @@ mode1:
     call draw_buttons
     popf
 
-    ; sub cx, [x_point]
-    ; sub dx, [y_point]
+    ; check if pressed
+    push [x_point]
+    push [y_point]
+    call get_mouse_info
+    pop [y_point]
+    pop [x_point]
+    jnz mode1
 
-    mov cx, 1
-    mov dx, 1
+    ; calculate distance
+    sub cx, [x_point]
+    sub dx, [y_point]
+    neg cx
+    neg dx
 
-    call hide_selected_points
-    call move_selected_points ; unable to select points after moved
+    ; move and draw
+    push [x_point]
+    push [y_point]
+    call hide_selected_points ; has bugs when going too far don't know which proc
+    call move_selected_points
     call draw_saved_points
-
-    ; mov cx, [x_point]
-    ; mov dx, [y_point]
+    pop [y_point]
+    pop [x_point]
 
     jmp mode1
+
+switch_mode: ; move when combining buttons
+    call draw_buttons
+    popf
+    cmp [mode], 1
+    jz mode1
+
+    cmp [mode], 2
+    jz mode2
+
+    cmp [mode], 3
+    jz mode3
 
 mode2:
     ; get mouse data
@@ -971,6 +1000,7 @@ mode2:
 
     call update_points
     call draw_saved_points
+
     jmp mode2
 
 mode3:
@@ -989,6 +1019,7 @@ mode3:
     mov [color], 15
     call save_point
     call draw_saved_points
+
     jmp mode3
 
 exit_loop:
@@ -1000,9 +1031,10 @@ exit:
 	int 21h
 END start
 
-; do move points
 ; merge the 3 buttons
 ; add delete button
 ; add colors
 ; add line button
 ; add way to see lines
+; add out of bounds support by modifing the draw saved points and get point at location
+; add zoom in and zoom out
