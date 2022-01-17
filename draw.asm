@@ -23,17 +23,21 @@ button_images dw 48 dup(0)
 
 CODESEG
 
-proc clear_selected_points
+proc clear_selected_points ; changed, mabey has a bug
+    ; zf = 1 = reset at least one point
     push ax
     push bx
     push cx
+    push dx
 
+    xor dx, dx
     mov cx, 256
     jmp next_point1
 
 reset_point:
     mov ah, 1
     mov [point_info + bx], ax
+    mov dx, 1
     loop next_point1
     jmp finish3
 
@@ -48,6 +52,8 @@ next_point1:
     jmp finish3
 
 finish3:
+    cmp dx, 1
+    pop dx
     pop cx
     pop bx
     pop ax
@@ -204,11 +210,10 @@ proc show_mouse
 endp
 
 proc get_mouse_info
-	; zf = 1 = pressed
+	; bx = 1 = pressed
 	; x_point = X co-ordinate
 	; y_point = y co-ordinate
     push ax
-    push bx
     push cx
     push dx
 
@@ -219,23 +224,20 @@ proc get_mouse_info
     mov [y_point], dx
     sub [x_point], 1
     sub [y_point], 1
-    not bx
-    test bx, 1
+    and bx, 1
 
     pop dx
     pop cx
-    pop bx
     pop ax
 	ret
 endp
 
 proc get_mouse_press_info
-	; zf = 1 = pressed
+	; bx = 1 = pressed
 	; x_point = X co-ordinate
 	; y_point = y co-ordinate
     ; only call once per frame
     push ax
-    push bx
     push cx
     push dx
 
@@ -247,16 +249,14 @@ proc get_mouse_press_info
     sub [x_point], 1
     sub [y_point], 1
 
-    and bl, 1
+    and bx, 1
     mov al, [pressed_last_frame]
     mov [pressed_last_frame], bl
     not al
     and bl, al
-    cmp bl, 1
 
     pop dx
     pop cx
-    pop bx
     pop ax
 	ret
 endp
@@ -406,39 +406,39 @@ proc update_buttons
 change_both:
     mov [highlighted_button], 255
     cmp [y_point], 16
-    jg not_pressed
+    jg not_pressed_button
 
     shr [x_point], 4
     mov al, [button_count]
     xor ah, ah
     cmp [x_point], ax
-    jge not_pressed
+    jge not_pressed_button
 
     sub ax, [x_point]
     mov [highlighted_button], al
     mov [mode], al
-    jmp pressed
+    jmp pressed_button
 
 change_highlighted:
     mov [highlighted_button], 255
     cmp [y_point], 16
-    jg not_pressed
+    jg not_pressed_button
 
     shr [x_point], 4
     mov al, [button_count]
     xor ah, ah
     cmp [x_point], ax
-    jge not_pressed
+    jge not_pressed_button
     
     sub ax, [x_point]
     mov [highlighted_button], al
-    jmp pressed
+    jmp pressed_button
 
-pressed:
+pressed_button:
     call toggle_zf_on
     jmp finish5
 
-not_pressed:
+not_pressed_button:
     call toggle_zf_off
     jmp finish5
 
@@ -449,9 +449,10 @@ finish5:
     ret
 endp
 
-proc update_points
+proc update_points ; changed, mabey has a bug, dont use
     ; gets location in x_point, y_point
     ; gets mouse press info in zf (1 = pressed)
+    ; zf = 1 = pressed point or reset any points
     push ax
     push bx
 
@@ -459,19 +460,28 @@ proc update_points
     jmp above_point
 
 pressed_point:
+    ; check if pressing point
     call get_point_at_location
     jnz reset_points
+
+    ; change point to selected
     mov bx, ax
     add bx, ax
     mov ax, [point_info + bx]
     mov ah, 3
     mov [point_info + bx], ax
     call clear_highlighted_point
+
+    ; update zf
+    call toggle_zf_on
     jmp finish6
 
 above_point:
+    ; check if above point
     call get_point_at_location
     jnz reset_highlighted
+
+    ; change point to highlighted
     mov bx, ax
     add bx, ax
     mov ax, [point_info + bx]
@@ -480,11 +490,12 @@ above_point:
     call clear_highlighted_point
     mov ah, 2
     mov [point_info + bx], ax
+
     jmp finish6
 
 reset_points:
-    call clear_selected_points
     call clear_highlighted_point
+    call clear_selected_points
     jmp finish6
 
 reset_highlighted:
@@ -638,7 +649,7 @@ go_down3:
 print:
     call print_point
 
-    jmp next
+    jmp next2
 
 go_right3:
     test [bx], al
@@ -647,7 +658,7 @@ go_right3:
     test [bx + 1], ah
     jnz print
 
-next:
+next2:
     ror ax, 1
     inc [x_point]
 
@@ -751,7 +762,7 @@ endp
 proc get_selected_point
     ; gets starting search location in ax
     ; returns point index in ax
-    ; zf = 1 = found number
+    ; zf = 1 = found point
     push bx
     push cx
 
@@ -901,126 +912,243 @@ start:
     mov [button_images + 92], 0001111111111000b
     mov [button_images + 94], 0000000000000000b
 
-    jmp mode3
+    jmp game_loop
 
-    mov [x_point], 10
-    mov [y_point], 10
-    call save_point
+execute_buttons:
+    ; check which button was pressed
 
-    mov [x_point], 20
-    mov [y_point], 10
-    call save_point
+    jmp game_loop ; remove once buttons are implomented
 
-    mov [point_info + 511], 3
-    mov [point_info + 509], 3
+move_loop:
+    sub cx, [x_point]
+    sub dx, [y_point]
+    
+    neg cx
+    neg dx
+    
+    push [x_point]
+    push [y_point]
 
-    mov cx, 5
-    mov dx, 10
+    mov ax, cx
+    or ax, dx
+    jz next
 
-    call move_selected_points
     call hide_selected_points
-
-    mov ax, [x_points + 510]
-    mov ax, [y_points + 510]
-    mov ax, [x_points + 508]
-    mov ax, [y_points + 508]
-    mov ax, [point_info + 511]
-    mov ax, [point_info + 509]
-
-    mov [x_point], 25
-    mov [y_point], 20
-
-    call get_point_at_location
+    call move_selected_points
     call draw_saved_points
 
-    jmp exit_loop
+next:
+    pop dx
+    pop cx
 
-mode1:
-    ; save last mouse data
+    call get_mouse_info
+    cmp bx, 1
+    jnz game_loop
+    jmp move_loop
+
+game_loop:
+    ; draw points
+    call draw_saved_points
+
+    ; clear highlighted point
+    call clear_highlighted_point
+
+    ; get mouse info
+    call get_mouse_press_info
+
+    ; update and execute buttons
+    cmp bx, 1
+    call update_buttons
+    pushf
+    call draw_buttons
+    popf
+    jz execute_buttons
+
+    ; check if on point and get index
+    call get_point_at_location
+    
+    ; store zf in bh
+    pushf
+    pop cx
+    shr cx, 6
+    and cx, 1
+    mov bh, al
+
+    ; variables:
+
+    ; ax = point you are on
+    ; bl = pressed
+    ; bh = on point
+    ; [x_point] = current x
+    ; [y_point] = current y
+
+    ; decision tree:
+    ; * = has a lable
+    
+    ; start:
+    ;     clear highlighted
+    ;     not pressed: *
+    ;         on point:
+    ;             not point selected:
+    ;                 set highlighed
+    ;     pressed:
+    ;         not on point: *
+    ;             not exists selected point: *
+    ;                 draw point
+    ;             exists selected point:
+    ;                 clear selected
+    ;         on point:
+    ;             not point selected: *
+    ;                 select point
+    ;             point selected:
+    ;                 move selected
+
+    call clear_highlighted_point
+    cmp bl, 0
+    jz not_pressed
+    
+    cmp bh, 0
+    jz not_on_point
+
+    mov bx, ax
+    add bx, ax
+    mov cx, [point_info + bx]
+    cmp ch, 3
+    jnz not_point_selected
+
     mov cx, [x_point]
     mov dx, [y_point]
 
-    ; get mouse data
-    call get_mouse_press_info
+    jmp move_loop
 
-    ; swich modes
-    pushf
-    call update_buttons
-    jz switch_mode
-    call draw_buttons
-    popf
+not_pressed:
+    cmp bh, 0
+    jz game_loop
 
-    ; check if pressed
-    push [x_point]
-    push [y_point]
-    call get_mouse_info
-    pop [y_point]
-    pop [x_point]
-    jnz mode1
+    mov bx, ax
+    add bx, ax
+    mov cx, [point_info + bx]
+    cmp ch, 3
+    jz game_loop
 
-    ; calculate distance
-    sub cx, [x_point]
-    sub dx, [y_point]
-    neg cx
-    neg dx
+    mov ch, 2
+    mov [point_info + bx], cx
 
-    ; move and draw
-    push [x_point]
-    push [y_point]
-    call hide_selected_points ; has bugs when going too far don't know which proc
-    call move_selected_points
-    call draw_saved_points
-    pop [y_point]
-    pop [x_point]
+    jmp game_loop
 
-    jmp mode1
+not_on_point:
+    mov ax, 256
+    call get_selected_point
+    jnz not_exists_selected_point
 
-switch_mode: ; move when combining buttons
-    call draw_buttons
-    popf
-    cmp [mode], 1
-    jz mode1
+    call clear_selected_points
 
-    cmp [mode], 2
-    jz mode2
+    jmp game_loop
 
-    cmp [mode], 3
-    jz mode3
-
-mode2:
-    ; get mouse data
-    call get_mouse_press_info
-
-    ; swich modes
-    pushf
-    call update_buttons
-    jz switch_mode
-    call draw_buttons
-    popf
-
-    call update_points
-    call draw_saved_points
-
-    jmp mode2
-
-mode3:
-    ; get mouse data
-    call get_mouse_press_info
-
-    ; swich modes
-    pushf
-    call update_buttons
-    jz switch_mode
-    call draw_buttons
-    popf
-
-    ; continue
-    jnz mode3
-    mov [color], 15
+not_exists_selected_point:
     call save_point
-    call draw_saved_points
 
-    jmp mode3
+    jmp game_loop
+
+not_point_selected:
+    mov bx, ax
+    add bx, ax
+    mov cx, [point_info + bx]
+    mov ch, 3
+    mov [point_info + bx], cx
+
+    jmp game_loop
+
+; mode1:
+;     ; save last mouse data
+;     mov cx, [x_point]
+;     mov dx, [y_point]
+
+;     ; get mouse data
+;     call get_mouse_press_info
+
+;     ; swich modes
+;     cmp bx, 1
+;     call update_buttons
+;     pushf
+;     call draw_buttons
+;     popf
+;     jz switch_mode
+
+;     ; check if pressed
+;     push [x_point]
+;     push [y_point]
+;     call get_mouse_info
+;     pop [y_point]
+;     pop [x_point]
+;     cmp bx, 1
+;     jnz mode1
+
+;     ; calculate distance
+;     sub cx, [x_point]
+;     sub dx, [y_point]
+;     neg cx
+;     neg dx
+
+;     ; move and draw
+;     push [x_point]
+;     push [y_point]
+;     call hide_selected_points ; has bugs when going too far don't know which proc
+;     call move_selected_points
+;     call draw_saved_points
+;     pop [y_point]
+;     pop [x_point]
+
+;     jmp mode1
+
+; switch_mode: ; move when combining buttons
+;     cmp [mode], 1
+;     jz mode1
+
+;     cmp [mode], 2
+;     jz mode2
+
+;     cmp [mode], 3
+;     jz mode3
+
+; mode2:
+;     ; get mouse data
+;     call get_mouse_press_info
+
+;     ; swich modes
+;     cmp bx, 1
+;     call update_buttons
+;     pushf
+;     call draw_buttons
+;     popf
+;     jz switch_mode
+
+;     cmp bx, 1
+;     call update_points
+;     call draw_saved_points
+
+;     jmp mode2
+
+; mode3:
+;     ; get mouse data
+;     call get_mouse_press_info
+
+;     ; swich modes
+;     cmp bx, 1
+;     call update_buttons
+;     pushf
+;     call draw_buttons
+;     popf
+;     jz switch_mode
+
+;     ; continue
+;     cmp bx, 1
+;     jnz mode3
+;     mov [color], 15
+;     call save_point
+;     call draw_saved_points
+
+;     jmp mode3
 
 exit_loop:
     jmp exit_loop
